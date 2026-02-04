@@ -493,7 +493,7 @@ class InventoryApp:
             db.add_item(name, count, location_id)
             self.refresh_items()
             self.refresh_summary()
-            messagebox.showinfo("Success", f'Added "{name}" to inventory.')
+            messagebox.showinfo("Success", f'Added "{name}" to inventory. Yay I made a change!!')
     
     def show_deploy_dialog(self):
         """Show the dialog for deploying a computer."""
