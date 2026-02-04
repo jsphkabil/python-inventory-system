@@ -26,13 +26,12 @@ A desktop application for tracking IT equipment across multiple locations, built
 ## Running the Application
 
 ```bash
-cd python_app
 python inventory_app.py
 ```
 
 ## Detailed Instructions
 On GitHub repo click green 'Code' button > Download ZIP > Unzip > Type and enter 'cmd' in address bar(while in the folder path) >
-In terminal enter 'cd python_app' > In terminal enter 'python inventory_app.py'
+In terminal enter 'python inventory_app.py'
 
 ## Database
 
@@ -52,3 +51,4 @@ python_app/
 ├── requirements.txt   # Dependencies (standard library only)
 └── README.md          # This file
 ```
+
