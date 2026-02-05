@@ -519,7 +519,7 @@ class AddItemDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Add New Item")
-        self.top.geometry("400x250")
+        self.top.geometry("400x270")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -608,7 +608,7 @@ class DeployComputerDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Deploy Computer")
-        self.top.geometry("500x500")
+        self.top.geometry("700x500")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -714,3 +714,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
