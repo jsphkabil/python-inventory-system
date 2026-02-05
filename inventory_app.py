@@ -620,6 +620,23 @@ class DeployComputerDialog:
         self.top.geometry(f"+{x}+{y}")
         
         self.build_ui()
+
+    ### Function for shopping-cart style 'Deploy Computer' window.
+    def increment_count(self, var: tk.StringVar):
+        """Increment the new count by 1."""
+        try:
+            current = int(var.get() or "0")
+            var.set(str(current + 1))
+        except ValueError:
+            var.set("1")
+    
+    def decrement_count(self, var: tk.StringVar):
+        """Decrement the new count by 1 (minimum 0)."""
+        try:
+            current = int(var.get() or "0")
+            var.set(str(max(0, current - 1)))
+        except ValueError:
+            var.set("0")
     
     def build_ui(self):
         """Build the dialog UI."""
@@ -659,10 +676,27 @@ class DeployComputerDialog:
             qty_var = tk.StringVar(value="0")
             self.quantity_vars[item['id']] = qty_var
             
+            ### +/- buttons for 'Deploy Computer' window.
+            ttk.Button(
+                item_frame,
+                text="-",
+                command=lambda v=qty_var: self.decrement_count(v),
+                width=2,
+                padding=(2, 1)
+            ).pack(side=tk.LEFT, padx=(0, 5), pady=(4, 4))
+
+            ttk.Button(
+                item_frame,
+                text="+",
+                command=lambda v=qty_var: self.increment_count(v),
+                width=2,
+                padding=(2, 1)
+            ).pack(side=tk.RIGHT, padx=(5, 0), pady=(4, 4))
+
             ttk.Entry(
                 item_frame,
                 textvariable=qty_var,
-                width=8,
+                width=4,
                 justify='center'
             ).pack(side=tk.RIGHT)
         
@@ -673,8 +707,8 @@ class DeployComputerDialog:
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X, pady=(15, 0))
         
-        ttk.Button(btn_frame, text="Cancel", command=self.top.destroy).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(btn_frame, text="Deploy", command=self.submit).pack(side=tk.RIGHT)
+        ttk.Button(btn_frame, text="Cancel", command=self.top.destroy).pack(side=tk.RIGHT, padx=(5, 5))
+        ttk.Button(btn_frame, text="Deploy", command=self.submit).pack(side=tk.RIGHT, padx=(5, 0))
     
     def submit(self):
         """Validate and submit the deployment."""
@@ -714,4 +748,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
