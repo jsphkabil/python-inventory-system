@@ -288,13 +288,14 @@ class InventoryApp:
         # Update and Delete buttons
         action_frame = ttk.Frame(self.controls_frame)
         action_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        self.delete_btn = ttk.Button(
+
+        ### 'Edit' button to replace 'Delete' button, 'Delete' button will be moved to 'EditItemDialog' class.
+        self.edit_btn = ttk.Button(
             action_frame,
-            text="Delete Item",
-            command=self.delete_selected_item
+            text="Edit Item",
+            command=self.show_edit_dialog
         )
-        self.delete_btn.pack(side=tk.LEFT)
+        self.edit_btn.pack(side=tk.LEFT)
         
         self.update_btn = ttk.Button(
             action_frame,
@@ -462,26 +463,48 @@ class InventoryApp:
         
         messagebox.showinfo("Success", "Item count updated successfully!")
     
-    def delete_selected_item(self):
-        """Delete the currently selected item."""
+    ### Function for 'Edit Item' button, 'delete_selected_item' function will be moved to 'EditItemDialog' class
+    def show_edit_dialog(self):
+        """Edit the currently selected item."""
         if self.selected_item_id is None:
             return
-        
+
         item = db.get_item_by_id(self.selected_item_id)
         if not item:
             return
-        
-        result = messagebox.askyesno(
-            "Delete Item?",
-            f'Are you sure you want to delete "{item["name"]}" from the inventory?\n\nThis action cannot be undone.'
+
+        dialog = EditItemDialog(
+            self.root,
+            item=item,
+            locations=self.locations
         )
-        
-        if result:
-            db.delete_item(self.selected_item_id)
-            self.hide_editor()
+        self.root.wait_window(dialog.top)
+
+        ### 'If' statement to check for delete
+        if dialog.result == "deleted":
+            self.selected_item_id = None
             self.refresh_items()
             self.refresh_summary()
-            messagebox.showinfo("Success", f'"{item["name"]}" has been removed from inventory.')
+            self.hide_editor()
+            messagebox.showinfo("Success", "Item deleted successfully!")
+            
+        if dialog.result:
+            name, count, location_id = dialog.result
+
+            db.update_item(
+                item_id=self.selected_item_id,
+                name=name,
+                count=count,
+                location_id=location_id
+            )
+
+            self.refresh_items()
+            self.refresh_summary()
+
+            self.items_tree.selection_set(str(self.selected_item_id))
+            self.show_editor(db.get_item_by_id(self.selected_item_id))
+
+            messagebox.showinfo("Success", "Item updated successfully!")
     
     def show_add_item_dialog(self):
         """Show the dialog for adding a new item."""
@@ -595,6 +618,123 @@ class AddItemDialog:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
         
+        self.result = (name, count, location_id)
+        self.top.destroy()
+
+
+### 'EditItemDialog' Class for window to edit item information
+class EditItemDialog:
+    """Dialog for editing an inventory item."""
+
+    ### 'Delete Item' function
+    def delete_selected_item(self):
+        """Delete the currently selected item."""
+        item_id = self.item.get("id")
+        if not item_id:
+            return
+        
+        result = messagebox.askyesno(
+            "Delete Item?",
+            f'Are you sure you want to delete "{self.item["name"]}" from the inventory?\n\nThis action cannot be undone.',
+            parent=self.top
+        )
+
+        if result:
+            db.delete_item(item_id)
+            self.result = "deleted"
+            self.top.destroy()
+
+    def __init__(self, parent: tk.Tk, locations: list[dict], item: dict):
+        self.result = None
+        self.locations = locations
+        self.item = item  # the item being edited
+
+        self.top = tk.Toplevel(parent)
+        self.top.title("Edit Item")
+        self.top.geometry("400x270")
+        self.top.resizable(False, False)
+        self.top.transient(parent)
+        self.top.grab_set()
+
+        # Center the dialog
+        self.top.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - 400) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - 250) // 2
+        self.top.geometry(f"+{x}+{y}")
+
+        self.build_ui()
+
+    def build_ui(self):
+        frame = ttk.Frame(self.top, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Item name
+        ttk.Label(frame, text="Item Name:").pack(anchor='w')
+        self.name_var = tk.StringVar(value=self.item["name"])
+        ttk.Entry(frame, textvariable=self.name_var, width=40).pack(fill=tk.X, pady=(5, 15))
+
+        # Count
+        ttk.Label(frame, text="Count:").pack(anchor='w')
+        self.count_var = tk.StringVar(value=str(self.item["count"]))
+        ttk.Entry(frame, textvariable=self.count_var, width=40).pack(fill=tk.X, pady=(5, 15))
+
+        # Location
+        ttk.Label(frame, text="Location:").pack(anchor='w')
+        self.location_var = tk.StringVar()
+        location_combo = ttk.Combobox(
+            frame,
+            textvariable=self.location_var,
+            state='readonly',
+            width=37
+        )
+        location_combo['values'] = [loc['name'] for loc in self.locations]
+        # Preselect current location
+        for i, loc in enumerate(self.locations):
+            if loc['id'] == self.item['location_id']:
+                location_combo.current(i)
+                break
+        location_combo.pack(fill=tk.X, pady=(5, 20))
+
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X)
+        
+        self.delete_btn = ttk.Button(
+            btn_frame,
+            text="Delete Item",
+            command=self.delete_selected_item
+        )
+        self.delete_btn.pack(side=tk.LEFT)
+        
+        ttk.Button(btn_frame, text="Cancel", command=self.top.destroy).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(btn_frame, text="Save", command=self.submit).pack(side=tk.RIGHT)
+
+    def submit(self):
+        name = self.name_var.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Please enter an item name", parent=self.top)
+            return
+
+        try:
+            count = int(self.count_var.get() or "0")
+            if count < 0:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid count (0 or greater)", parent=self.top)
+            return
+
+        # Map location name to ID
+        location_name = self.location_var.get()
+        location_id = None
+        for loc in self.locations:
+            if loc['name'] == location_name:
+                location_id = loc['id']
+                break
+
+        if not location_id:
+            messagebox.showerror("Error", "Please select a location", parent=self.top)
+            return
+
         self.result = (name, count, location_id)
         self.top.destroy()
 
