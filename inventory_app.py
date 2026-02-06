@@ -296,13 +296,6 @@ class InventoryApp:
             command=self.show_edit_dialog
         )
         self.edit_btn.pack(side=tk.LEFT)
-
-        self.delete_btn = ttk.Button(
-            action_frame,
-            text="Delete Item",
-            command=self.delete_selected_item
-        )
-        self.delete_btn.pack(side=tk.LEFT)
         
         self.update_btn = ttk.Button(
             action_frame,
@@ -487,6 +480,14 @@ class InventoryApp:
         )
         self.root.wait_window(dialog.top)
 
+        ### 'If' statement to check for delete
+        if dialog.result == "deleted":
+            self.selected_item_id = None
+            self.refresh_items()
+            self.refresh_summary()
+            self.hide_editor()
+            messagebox.showinfo("Success", "Item deleted successfully!")
+            
         if dialog.result:
             name, count, location_id = dialog.result
 
@@ -504,28 +505,6 @@ class InventoryApp:
             self.show_editor(db.get_item_by_id(self.selected_item_id))
 
             messagebox.showinfo("Success", "Item updated successfully!")
-
-    
-    def delete_selected_item(self):
-        """Delete the currently selected item."""
-        if self.selected_item_id is None:
-            return
-        
-        item = db.get_item_by_id(self.selected_item_id)
-        if not item:
-            return
-        
-        result = messagebox.askyesno(
-            "Delete Item?",
-            f'Are you sure you want to delete "{item["name"]}" from the inventory?\n\nThis action cannot be undone.'
-        )
-        
-        if result:
-            db.delete_item(self.selected_item_id)
-            self.hide_editor()
-            self.refresh_items()
-            self.refresh_summary()
-            messagebox.showinfo("Success", f'"{item["name"]}" has been removed from inventory.')
     
     def show_add_item_dialog(self):
         """Show the dialog for adding a new item."""
@@ -646,6 +625,24 @@ class AddItemDialog:
 class EditItemDialog:
     """Dialog for editing an inventory item."""
 
+    ### 'Delete Item' function
+    def delete_selected_item(self):
+        """Delete the currently selected item."""
+        item_id = self.item.get("id")
+        if not item_id:
+            return
+        
+        result = messagebox.askyesno(
+            "Delete Item?",
+            f'Are you sure you want to delete "{self.item["name"]}" from the inventory?\n\nThis action cannot be undone.',
+            parent=self.top
+        )
+
+        if result:
+            db.delete_item(item_id)
+            self.result = "deleted"
+            self.top.destroy()
+
     def __init__(self, parent: tk.Tk, locations: list[dict], item: dict):
         self.result = None
         self.locations = locations
@@ -701,6 +698,13 @@ class EditItemDialog:
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X)
         
+        self.delete_btn = ttk.Button(
+            btn_frame,
+            text="Delete Item",
+            command=self.delete_selected_item
+        )
+        self.delete_btn.pack(side=tk.LEFT)
+        
         ttk.Button(btn_frame, text="Cancel", command=self.top.destroy).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(btn_frame, text="Save", command=self.submit).pack(side=tk.RIGHT)
 
@@ -732,7 +736,6 @@ class EditItemDialog:
 
         self.result = (name, count, location_id)
         self.top.destroy()
-
 
 
 class DeployComputerDialog:
