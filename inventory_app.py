@@ -145,7 +145,7 @@ class InventoryApp:
         
         ttk.Label(search_col, text="Search Items", background='#ffffff').pack(anchor='w')
         self.search_var = tk.StringVar()
-        self.search_var.trace('w', lambda *args: self.refresh_items())
+        self.search_var.trace_add('write', lambda *args: self.refresh_items())
         search_entry = ttk.Entry(search_col, textvariable=self.search_var, width=40)
         search_entry.pack(fill=tk.X, pady=(5, 0))
         
