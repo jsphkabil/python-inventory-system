@@ -175,6 +175,19 @@ def add_item(name: str, count: int, location_id: str) -> int:
     conn.close()
     return new_id
 
+### 'Update Item' function to work in conjuction with new 'Edit Item' feature in GUI
+def update_item(item_id: int, name: str, count: int, location_id: str):
+    """Update item's name, count, and location"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE inventory
+        SET name = ?, count = ?, location_id = ?
+        WHERE id = ?
+    """, (name, max(0, count), location_id, item_id)
+    )
+    conn.commit()
+    conn.close()
 
 def update_item_count(item_id: int, new_count: int):
     """Update the count of an item."""
