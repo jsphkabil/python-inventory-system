@@ -84,22 +84,49 @@ class InventoryApp:
         # Summary section
         self.build_summary_section(main_frame)
     
+    # def build_header(self, parent: ttk.Frame):
+    #     """Build the header section."""
+    #     header_frame = ttk.Frame(parent)
+    #     header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+    #     ttk.Label(
+    #         header_frame,
+    #         text="IT Help Room Inventory",
+    #         style='Header.TLabel'
+    #     ).pack()
+        
+    #     ttk.Label(
+    #         header_frame,
+    #         text="Track and manage IT equipment across all locations",
+    #         style='Subheader.TLabel'
+    #     ).pack()
+
+    ### Build header including settings option
     def build_header(self, parent: ttk.Frame):
         """Build the header section."""
         header_frame = ttk.Frame(parent)
         header_frame.pack(fill=tk.X, pady=(0, 15))
-        
+
+        title_frame = ttk.Frame(header_frame)
+        title_frame.pack(fill=tk.X)
+
         ttk.Label(
-            header_frame,
+            title_frame,
             text="IT Help Room Inventory",
             style='Header.TLabel'
-        ).pack()
-        
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(
+            title_frame,
+            text="⚙ Settings",
+            command=self.show_settings_dialog
+        ).pack(side=tk.RIGHT)
+
         ttk.Label(
             header_frame,
-            text="Track and manage IT equipment across all locations",
-            style='Subheader.TLabel'
-        ).pack()
+            text="Trakc and manage IT equipment across all locations",
+            style='Subjeader.TLabel'
+        ).pack(anchor='w')
     
     def build_search_section(self, parent: ttk.Frame):
         """Build the search and filter section."""
@@ -462,7 +489,29 @@ class InventoryApp:
         self.items_tree.selection_set(str(self.selected_item_id))
         
         messagebox.showinfo("Success", "Item count updated successfully!")
+
+    ### Function for updating location drop-down field
+    def update_location_filter(self):
+        values = ['All Locations'] + [loc['name'] for loc in self.locations]
+        self.location_var.set('All Locations')
+
+        for widget in self.root.winfo_children():
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Combobox):
+                    child['values'] = values
     
+    ### Function for 'Settings' button
+    def show_settings_dialog(self):
+        """Open the settings dialog."""
+        dialog = SettingsDialog(self.root, self.locations)
+        self.root.wait_window(dialog.top)
+
+        if dialog.updated:
+            self.locations = db.get_all_locations()
+            self.refresh_items()
+            self.refresh_summary()
+            self.update_location_filter()
+
     ### Function for 'Edit Item' button, 'delete_selected_item' function will be moved to 'EditItemDialog' class
     def show_edit_dialog(self):
         """Edit the currently selected item."""
@@ -531,6 +580,101 @@ class InventoryApp:
             
             total_qty = sum(qty for _, qty in dialog.result)
             messagebox.showinfo("Success", f"Computer deployed with {total_qty} items!")
+
+### Dialog box for settings window
+class SettingsDialog:
+    def __init__(self, parent: tk.Tk, locations: list[dict]):
+        self.updated = False
+        self.locations = locations
+
+        self.top = tk.Toplevel(parent)
+        self.top.title("settings - Manage Locations")
+        self.top.geometry("500x400")
+        self.top.resizable(False, False)
+        self.top.transient(parent)
+        self.top.grab_set()
+
+        self.build_ui()
+        self.refresh_locations()
+
+    def build_ui(self):
+        frame = ttk.Frame(self.top, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="Manage Locations",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(anchor='w', pady=(0, 10))
+
+        self.location_listbox = tk.Listbox(frame, height=10)
+        self.location_listbox.pack(fill=tk.BOTH, expand=True)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X, pady=(15, 0))
+
+        ttk.Button(btn_frame, text="Add", command = self.add_location).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Edit", command=self.edit_location).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete", command=self.delete_location).pack(side=tk.LEFT)
+
+        ttk.Button(btn_frame, text="Close", command=self.top.destroy).pack(side=tk.RIGHT)
+
+    def refresh_locations(self):
+        self.location_listbox.delete(0, tk.END)
+        self.locations = db.get_all_locations()
+        for loc in self.locations:
+            self.location_listbox.insert(tk.END, loc['name'])
+
+    def add_location(self):
+        name = simple_input_dialog(self.top, "Add Location", "Enter location name:")
+        if not name:
+            return
+
+        db.add_location(name)
+        self.updated = True
+        self.refresh_locations()
+
+    def edit_location(self):
+        selection = self.location_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        location = self.locations[index]
+
+        new_name = simple_input_dialog(
+            self.top,
+            "Edit Location",
+            "Edit location name:",
+            initial=location['name']
+        )
+
+        if not new_name:
+            return
+
+        db.update_location(location['id'], new_name)
+        self.updated = True
+        self.refresh_locations()
+
+    def delete_location(self):
+        selection = self.location_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        location = self.locations[index]
+
+        confirm = messagebox.askyesno(
+            "Delete Location?",
+            f'Are you sure you want to delete "{location["name"]}"?\n\n'
+            "Items in this location must be reassigned first.",
+            parent=self.top
+        )
+
+        if confirm:
+            db.delete_location(location['id'])
+            self.updated = True
+            self.refresh_locations()
 
 
 class AddItemDialog:
@@ -879,6 +1023,33 @@ class DeployComputerDialog:
         
         self.result = deployments
         self.top.destroy()
+
+
+### Input Dialog Helper
+def simple_input_dialog(parent, title, prompt, initial=""):
+    dialog = tk.Toplevel(parent)
+    dialog.title(title)
+    dialog.geometry("300x150")
+    dialog.transient(parent)
+    dialog.grab_set()
+
+    ttk.Label(dialog, text=prompt).pack(pady=10)
+
+    value_var = tk.StringVar(value=initial)
+    entry = ttk.Entry(dialog, textvariable=value_var)
+    entry.pack(pady=5)
+    entry.focus()
+
+    result = {"value": None}
+
+    def submit():
+        result["value"] = value_var.get().strip()
+        dialog.destroy()
+
+    ttk.Button(dialog, text="OK", command=submit).pack(pady=10)
+
+    parent.wait_window(dialog)
+    return result["value"]
 
 
 def main():

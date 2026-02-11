@@ -3,6 +3,8 @@ SQLite database module for the IT Help Room Inventory Tracker.
 Handles all database operations including initialization, CRUD operations.
 """
 
+import uuid
+
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -224,6 +226,48 @@ def deploy_items(deployments: list[tuple[int, int]]):
             (quantity, item_id)
         )
     
+    conn.commit()
+    conn.close()
+
+
+### Function to add a location. Returns new location ID
+def add_location(name: str) -> str:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    import uuid
+    location_id = str(uuid.uuid4())
+
+    cursor.execute(
+        "INSERT INTO locations (id, name) VALUES (?, ?)",
+        (location_id, name)
+    )
+
+    conn.commit()
+    conn.close()
+    return location_id
+
+
+### Function to update a location
+def delete_location(location_id: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM inventory WHERE location_id = ?",
+        (location_id,)
+    )
+    item_count = cursor.fetchone()[0]
+
+    if item_count > 0:
+        conn.close()
+        raise Exception("Cannot delete location that still has items.")
+    
+    cursor.execute(
+        "DELETE FROM locations WHERE id = ?",
+        (location_id,)
+    )
+
     conn.commit()
     conn.close()
 
