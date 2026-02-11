@@ -942,6 +942,17 @@ class DeployComputerDialog:
         
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+
+        ### 'Deploy Computer' window to scrollable window
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        # Windows
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+
+        # Linux
+        canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
         
         # Add items with quantity inputs
         for item in self.items:
