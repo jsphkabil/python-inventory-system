@@ -248,7 +248,7 @@ def add_location(name: str) -> str:
     return location_id
 
 
-### Function to update a location
+### Function to delete a location
 def delete_location(location_id: str):
     conn = get_connection()
     cursor = conn.cursor()
@@ -268,6 +268,20 @@ def delete_location(location_id: str):
         (location_id,)
     )
 
+    conn.commit()
+    conn.close()
+
+
+### Function to update a location
+def update_location(location_id: str, new_name: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "Update locations SET name = ? WHERE id = ?",
+        (new_name, location_id)
+    )
+    
     conn.commit()
     conn.close()
 

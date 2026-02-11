@@ -155,16 +155,16 @@ class InventoryApp:
         
         ttk.Label(location_col, text="Filter by Location", background='#ffffff').pack(anchor='w')
         self.location_var = tk.StringVar(value='all')
-        location_combo = ttk.Combobox(
+        self.location_combo = ttk.Combobox(
             location_col,
             textvariable=self.location_var,
             state='readonly',
             width=30
         )
-        location_combo['values'] = ['All Locations'] + [loc['name'] for loc in self.locations]
-        location_combo.current(0)
-        location_combo.bind('<<ComboboxSelected>>', lambda e: self.refresh_items())
-        location_combo.pack(fill=tk.X, pady=(5, 0))
+        self.location_combo['values'] = ['All Locations'] + [loc['name'] for loc in self.locations]
+        self.location_combo.current(0)
+        self.location_combo.bind('<<ComboboxSelected>>', lambda e: self.refresh_items())
+        self.location_combo.pack(fill=tk.X, pady=(5, 0))
         
         # Action buttons row
         button_frame = ttk.Frame(search_frame)
@@ -493,12 +493,8 @@ class InventoryApp:
     ### Function for updating location drop-down field
     def update_location_filter(self):
         values = ['All Locations'] + [loc['name'] for loc in self.locations]
+        self.location_combo['values'] = values
         self.location_var.set('All Locations')
-
-        for widget in self.root.winfo_children():
-            for child in widget.winfo_children():
-                if isinstance(child, ttk.Combobox):
-                    child['values'] = values
     
     ### Function for 'Settings' button
     def show_settings_dialog(self):
@@ -536,8 +532,7 @@ class InventoryApp:
             self.refresh_summary()
             self.hide_editor()
             messagebox.showinfo("Success", "Item deleted successfully!")
-            
-        if dialog.result:
+        elif isinstance(dialog.result, tuple):
             name, count, location_id = dialog.result
 
             db.update_item(
@@ -553,7 +548,7 @@ class InventoryApp:
             self.items_tree.selection_set(str(self.selected_item_id))
             self.show_editor(db.get_item_by_id(self.selected_item_id))
 
-            messagebox.showinfo("Success", "Item updated successfully!")
+            messagebox.showinfo("Success", "Item deleted successfully!")
     
     def show_add_item_dialog(self):
         """Show the dialog for adding a new item."""
