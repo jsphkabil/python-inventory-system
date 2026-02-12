@@ -9,6 +9,8 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from collections import defaultdict
+
 # Database file path
 DB_PATH = Path(__file__).parent / "inventory.db"
 
@@ -41,7 +43,7 @@ def init_database():
             name TEXT NOT NULL,
             count INTEGER NOT NULL DEFAULT 0,
             deployable INTEGER NOT NULL DEFAULT 0,
-            low_count INTEGER,
+            low_count INTEGER NOT NULL DEFAULT 0,
             location_id TEXT NOT NULL,
             FOREIGN KEY (location_id) REFERENCES locations(id)
         )
@@ -189,7 +191,7 @@ def get_item_by_id(item_id: int) -> Optional[dict]:
 # changed to add item information
 def add_item(name: str, count: int, location_id: str,
              deployable: bool = False,
-             low_count: Optional[int] = None) -> int:
+             low_count: int = 0) -> int:
     """Add a new item to the inventory. Returns the new item's ID."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -336,3 +338,45 @@ def get_location_summary() -> list[dict]:
     summary = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return summary
+
+### Functions to change summary section from displaying total item count to low stock item count
+def get_low_item_list() -> list[dict]:
+    """Get complete list of low stock items"""
+    items = get_all_items()
+    low_items = []
+
+    for item in items:
+        if item["low_count"] is not None:
+            if item["count"] <= item["low_count"]:
+                low_items.append(item)
+        else:
+            if item["count"] == 0:
+                low_items.append(item)
+
+    return low_items
+
+def get_low_item_location_summary() -> list[dict]:
+    """Get summary statistics for low sock items in each locations"""
+    low_items = get_low_item_list()
+    summary_dict = defaultdict(lambda: {"item_count": 0, "total_count": 0})
+
+    for item in low_items:
+        loc_id = item["location_id"]
+        loc_name = item["location_name"]
+
+        summary_dict[loc_id]["name"] = loc_name
+        summary_dict[loc_id]["item_count"] += 1
+        summary_dict[loc_id]["total_count"] += item["count"]
+
+    summary = []
+    for loc_id, data in summary_dict.items():
+        summary.append({
+            "id": loc_id,
+            "name": data["name"],
+            "item_count": data["item_count"],
+            "total_count": data["total_count"]
+        })
+
+    summary.sort(key=lambda x: x["name"])
+    return summary
+

@@ -200,6 +200,8 @@ class InventoryApp:
             show='headings',
             selectmode='browse'
         )
+        ### Added to allow alternate presentation of low stock items
+        self.items_tree.tag_configure('low_stock', foreground = 'red')
         
         self.items_tree.heading('name', text='Item Name')
         self.items_tree.heading('count', text='Count')
@@ -337,7 +339,7 @@ class InventoryApp:
         
         ttk.Label(
             summary_frame,
-            text="Inventory Summary",
+            text="Low Stock Summary",
             style='Section.TLabel'
         ).pack(anchor='w', pady=(0, 10))
         
@@ -350,7 +352,8 @@ class InventoryApp:
         for widget in self.summary_container.winfo_children():
             widget.destroy()
         
-        summary = db.get_location_summary()
+        ### Changed to low stock item summary
+        summary = db.get_low_item_location_summary()
         
         for i, loc in enumerate(summary):
             loc_frame = ttk.Frame(self.summary_container, padding=10)
@@ -358,8 +361,8 @@ class InventoryApp:
             
             ttk.Label(
                 loc_frame,
-                text=str(loc['total_count']),
-                font=('Segoe UI', 20, 'bold'),
+                text=f"Low Items: {loc['item_count']}",
+                font=('Segoe UI', 15, 'bold'),
                 background='#ffffff'
             ).pack()
             
@@ -368,14 +371,6 @@ class InventoryApp:
                 text=loc['name'],
                 background='#ffffff',
                 foreground='#666666'
-            ).pack()
-            
-            ttk.Label(
-                loc_frame,
-                text=f"{loc['item_count']} items",
-                background='#ffffff',
-                foreground='#999999',
-                font=('Segoe UI', 9)
             ).pack()
     
     def refresh_items(self):
@@ -400,11 +395,18 @@ class InventoryApp:
         items = db.get_all_items(location_id, search)
         
         for item in items:
+            ### Altered to mark item as low stock so that it can be presented differently
+            tags = ()
+            low = item["low_count"] if item["low_count"] is not None else 0
+            if item["count"] <= low:
+                tags = ('low_stock',)
+
             self.items_tree.insert(
                 '',
                 tk.END,
                 iid=str(item['id']),
-                values=(item['name'], item['count'], item['location_name'])
+                values=(item['name'], item['count'], item['location_name']),
+                tags=tags
             )
 
     ### Function for 'Reset Info' button, refreshes information being displayed
@@ -557,7 +559,7 @@ class InventoryApp:
             self.items_tree.selection_set(str(self.selected_item_id))
             self.show_editor(db.get_item_by_id(self.selected_item_id))
 
-            messagebox.showinfo("Success", "Item deleted successfully!")
+            messagebox.showinfo("Success", "Item edited successfully!")
     
     def show_add_item_dialog(self):
         """Show the dialog for adding a new item."""
@@ -687,7 +689,7 @@ class SettingsDialog:
         self.locations = locations
 
         self.top = tk.Toplevel(parent)
-        self.top.title("settings - Manage Locations")
+        self.top.title("Settings - Manage Locations")
         self.top.geometry("500x400")
         self.top.resizable(False, False)
         self.top.transient(parent)
@@ -868,7 +870,7 @@ class AddItemDialog:
                 location_id = loc['id']
                 break
         
-        if not location_id:
+        if location_id is None:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
         
@@ -876,7 +878,20 @@ class AddItemDialog:
         deployable = self.deployable_var.get()
 
         low_count_text = self.low_count_var.get().strip()
-        low_count = int(low_count_text) if low_count_text else None
+        if low_count_text:
+            try:
+                low_count = int(low_count_text)
+                if low_count < 0:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror(
+                    "Error",
+                    "Low Count Threshold must be a valid number (0 or greater)",
+                    parent=self.top
+                )
+                return
+        else:
+            low_count = None
         
         self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
@@ -1005,7 +1020,7 @@ class EditItemDialog:
                 location_id = loc['id']
                 break
 
-        if not location_id:
+        if location_id is None:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
         
@@ -1013,7 +1028,20 @@ class EditItemDialog:
         deployable = self.deployable_var.get()
 
         low_count_text = self.low_count_var.get().strip()
-        low_count = int(low_count_text) if low_count_text else None
+        if low_count_text:
+            try:
+                low_count = int(low_count_text)
+                if low_count < 0:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror(
+                    "Error",
+                    "Low Count Threshold must be a valid number (0 or greater)",
+                    parent=self.top
+                )
+                return
+        else:
+            low_count = None
 
         self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
@@ -1029,7 +1057,6 @@ class DeployComputerDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Deploy Computer")
-        self.top.geometry("700x500")
         self.top.geometry("700x500")
         self.top.resizable(False, False)
         self.top.transient(parent)
@@ -1089,7 +1116,7 @@ class DeployComputerDialog:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         # Windows
-        canvas.bind("<MouseWheel>", _on_mousewheel)
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
         # Linux
         canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
