@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional
 import database as db
+from openpyxl import Workbook
 
 
 class InventoryApp:
@@ -97,8 +98,8 @@ class InventoryApp:
             title_frame,
             text="IT Help Room Inventory",
             style='Header.TLabel'
-        ).pack(side=tk.LEFT)
-
+        ).pack(side=tk.TOP)
+        
         ttk.Button(
             title_frame,
             text="⚙ Settings",
@@ -111,12 +112,19 @@ class InventoryApp:
             text="Refresh Info",
             command=self.manual_refresh
         ).pack(side=tk.RIGHT, padx=(0,10))
+        
+        ### Button to create report
+        ttk.Button(
+            title_frame,
+            text="Create Report",
+            command=self.create_report
+        ).pack(side=tk.LEFT)
 
         ttk.Label(
             header_frame,
-            text="Trakc and manage IT equipment across all locations",
-            style='Subjeader.TLabel'
-        ).pack(anchor='w')
+            text="Track and manage IT equipment across all locations",
+            style='Subheader.TLabel'
+        ).pack(side=tk.TOP)
     
     def build_search_section(self, parent: ttk.Frame):
         """Build the search and filter section."""
@@ -580,6 +588,34 @@ class InventoryApp:
             
             total_qty = sum(qty for _, qty in dialog.result)
             messagebox.showinfo("Success", f"Computer deployed with {total_qty} items!")
+
+    ### Function to create excel report
+    def create_report(self):
+        items = db.get_all_items()
+
+        if not items:
+            messagebox.showinfo("No Items", "There are no items to report")
+            return
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inventory Report"
+
+        ws.append(["Item Name", "Count"])
+
+        for item in items:
+            ws.append([item['name'], item['count']])
+
+        from tkinter import filedialog
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            title="Save Inventory Report As"
+        )
+
+        if file_path:
+            wb.save(file_path)
+            messagebox.showinfo("Report Created", f"Inventory report saved as :\n{file_path}")
 
 ### Dialog box for settings window
 class SettingsDialog:
