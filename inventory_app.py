@@ -1116,7 +1116,7 @@ class DeployComputerDialog:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         # Windows
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        canvas.bind("<MouseWheel>", _on_mousewheel)
 
         # Linux
         canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
