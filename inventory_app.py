@@ -83,23 +83,6 @@ class InventoryApp:
         
         # Summary section
         self.build_summary_section(main_frame)
-    
-    # def build_header(self, parent: ttk.Frame):
-    #     """Build the header section."""
-    #     header_frame = ttk.Frame(parent)
-    #     header_frame.pack(fill=tk.X, pady=(0, 15))
-        
-    #     ttk.Label(
-    #         header_frame,
-    #         text="IT Help Room Inventory",
-    #         style='Header.TLabel'
-    #     ).pack()
-        
-    #     ttk.Label(
-    #         header_frame,
-    #         text="Track and manage IT equipment across all locations",
-    #         style='Subheader.TLabel'
-    #     ).pack()
 
     ### Build header including settings option
     def build_header(self, parent: ttk.Frame):
@@ -121,6 +104,13 @@ class InventoryApp:
             text="⚙ Settings",
             command=self.show_settings_dialog
         ).pack(side=tk.RIGHT)
+
+        ### Button to refresh information being displayed
+        ttk.Button(
+            title_frame,
+            text="Refresh Info",
+            command=self.manual_refresh
+        ).pack(side=tk.RIGHT, padx=(0,10))
 
         ttk.Label(
             header_frame,
@@ -407,6 +397,12 @@ class InventoryApp:
                 iid=str(item['id']),
                 values=(item['name'], item['count'], item['location_name'])
             )
+
+    ### Function for 'Reset Info' button, refreshes information being displayed
+    def manual_refresh(self):
+        self.refresh_items()
+        self.refresh_summary()
+        self.root.update_idletasks()
     
     def on_item_select(self, event):
         """Handle item selection in the treeview."""
