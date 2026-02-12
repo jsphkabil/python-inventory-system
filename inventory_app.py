@@ -8,6 +8,7 @@ from tkinter import ttk, messagebox
 from typing import Optional
 import database as db
 from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 class InventoryApp:
@@ -591,31 +592,93 @@ class InventoryApp:
 
     ### Function to create excel report
     def create_report(self):
-        items = db.get_all_items()
+        items = db.get_all_items()  # get all items
 
         if not items:
-            messagebox.showinfo("No Items", "There are no items to report")
+            messagebox.showinfo("No Items", "There are no items to report.")
             return
-        
+
+        # --- Sort items by location first, then by name ---
+        items = sorted(items, key=lambda x: (x['location_name'], x['name']))
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Inventory Report"
 
-        ws.append(["Item Name", "Count"])
+        # --- Styles ---
+        title_font = Font(size=14, bold=True)
+        header_font = Font(bold=True)
+        bold_font = Font(bold=True)
+        header_fill = PatternFill("solid", fgColor="D9D9D9")  # light gray
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        center_align = Alignment(horizontal="center", vertical="center")
+        left_align = Alignment(horizontal="left", vertical="center")
+
+        # --- Title row ---
+        ws.merge_cells("A1:C1")
+        ws["A1"] = "General Inventory"
+        ws["A1"].font = title_font
+        ws["A1"].alignment = center_align
+
+        # --- Column headers ---
+        ws.append(["Location", "Item Description", "# in Inventory"])
+        for cell in ws[2]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        # --- Add items with location groups in the first column ---
+        current_row = 3
+        last_cabinet = None
 
         for item in items:
-            ws.append([item['name'], item['count']])
+            cabinet = item['location_name']
 
-        from tkinter import filedialog
+            # Insert item row
+            ws.append([
+                cabinet if cabinet != last_cabinet else "",  # only show location once
+                item['name'],
+                item['count']
+            ])
+
+            # Formatting
+            if cabinet != last_cabinet:
+                # Bold the location cell
+                ws[f"A{current_row}"].font = bold_font
+                ws[f"A{current_row}"].alignment = left_align
+
+            ws[f"B{current_row}"].alignment = left_align
+            ws[f"C{current_row}"].alignment = center_align
+
+            # Borders
+            for col in ["A", "B", "C"]:
+                ws[f"{col}{current_row}"].border = thin_border
+
+            last_cabinet = cabinet
+            current_row += 1
+
+        # --- Adjust column widths ---
+        ws.column_dimensions['A'].width = 20  # Location
+        ws.column_dimensions['B'].width = 40  # Item
+        ws.column_dimensions['C'].width = 20  # Count
+
+        # --- Save file ---
+        from tkinter import filedialog, messagebox
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx")],
             title="Save Inventory Report As"
         )
-
+        
         if file_path:
             wb.save(file_path)
-            messagebox.showinfo("Report Created", f"Inventory report saved as :\n{file_path}")
+            messagebox.showinfo("Report Created", f"Inventory report saved as:\n{file_path}")
 
 ### Dialog box for settings window
 class SettingsDialog:
