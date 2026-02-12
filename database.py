@@ -34,15 +34,28 @@ def init_database():
     """)
     
     # Create inventory table
+    # changed to add item information
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             count INTEGER NOT NULL DEFAULT 0,
+            deployable INTEGER NOT NULL DEFAULT 0,
+            low_count INTEGER,
             location_id TEXT NOT NULL,
             FOREIGN KEY (location_id) REFERENCES locations(id)
         )
     """)
+
+    # changed to add item information
+    cursor.execute("PRAGMA table_info(inventory)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    if "deployable" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN deployable INTEGER NOT NULL DEFAULT 0")
+
+    if "low_count" not in columns:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN low_count INTEGER")
     
     # Check if locations table is empty, if so seed it
     cursor.execute("SELECT COUNT(*) FROM locations")
@@ -102,9 +115,14 @@ def seed_inventory(cursor: sqlite3.Cursor):
         ('UPS Battery Backup', 8, 'server'),
         ('Server Rails', 10, 'server'),
     ]
+
+    # changed to add item information
     cursor.executemany(
-        "INSERT INTO inventory (name, count, location_id) VALUES (?, ?, ?)",
-        items
+        """
+        INSERT INTO inventory (name, count, deployable, low_count, location_id)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [(name, count, 1, None, location) for (name, count, location) in items]
     )
 
 
@@ -126,7 +144,9 @@ def get_all_items(location_id: Optional[str] = None, search_query: str = "") -> 
     cursor = conn.cursor()
     
     query = """
-        SELECT i.id, i.name, i.count, i.location_id, l.name as location_name
+        SELECT i.id, i.name, i.count,
+               i.deployable, i.low_count,
+               i.location_id, l.name as location_name
         FROM inventory i
         JOIN locations l ON i.location_id = l.id
         WHERE 1=1
@@ -154,7 +174,9 @@ def get_item_by_id(item_id: int) -> Optional[dict]:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT i.id, i.name, i.count, i.location_id, l.name as location_name
+        SELECT i.id, i.name, i.count,
+               i.deployable, i.low_count,
+               i.location_id, l.name as location_name
         FROM inventory i
         JOIN locations l ON i.location_id = l.id
         WHERE i.id = ?
@@ -164,32 +186,42 @@ def get_item_by_id(item_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def add_item(name: str, count: int, location_id: str) -> int:
+# changed to add item information
+def add_item(name: str, count: int, location_id: str,
+             deployable: bool = False,
+             low_count: Optional[int] = None) -> int:
     """Add a new item to the inventory. Returns the new item's ID."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO inventory (name, count, location_id) VALUES (?, ?, ?)",
-        (name, count, location_id)
+        """
+        INSERT INTO inventory (name, count, deployable, low_count, location_id)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (name, count, int(deployable), low_count, location_id)
     )
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return new_id
 
+
 ### 'Update Item' function to work in conjuction with new 'Edit Item' feature in GUI
-def update_item(item_id: int, name: str, count: int, location_id: str):
+# changed to add item information
+def update_item(item_id: int, name: str, count: int, location_id: str,
+                deployable: bool, low_count: Optional[int]):
     """Update item's name, count, and location"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE inventory
-        SET name = ?, count = ?, location_id = ?
+        SET name = ?, count = ?, deployable = ?, low_count = ?, location_id = ?
         WHERE id = ?
-    """, (name, max(0, count), location_id, item_id)
+    """, (name, max(0, count), int(deployable), low_count, location_id, item_id)
     )
     conn.commit()
     conn.close()
+
 
 def update_item_count(item_id: int, new_count: int):
     """Update the count of an item."""

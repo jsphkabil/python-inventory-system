@@ -533,13 +533,17 @@ class InventoryApp:
             self.hide_editor()
             messagebox.showinfo("Success", "Item deleted successfully!")
         elif isinstance(dialog.result, tuple):
-            name, count, location_id = dialog.result
+            ### Initializing new variables 'deployable' and 'low_count'
+            name, count, location_id, deployable, low_count = dialog.result
 
             db.update_item(
                 item_id=self.selected_item_id,
                 name=name,
                 count=count,
-                location_id=location_id
+                location_id=location_id,
+                ### Passing new variables through
+                deployable=deployable,
+                low_count=low_count
             )
 
             self.refresh_items()
@@ -556,8 +560,10 @@ class InventoryApp:
         self.root.wait_window(dialog.top)
         
         if dialog.result:
-            name, count, location_id = dialog.result
-            db.add_item(name, count, location_id)
+            ### Initializing new variables 'deployable' and 'low_count'
+            name, count, location_id, deployable, low_count = dialog.result
+            db.add_item(name, count, location_id, deployable, low_count)
+
             self.refresh_items()
             self.refresh_summary()
             messagebox.showinfo("Success", f'Added "{name}" to inventory. Yay I made a change!!')
@@ -565,6 +571,9 @@ class InventoryApp:
     def show_deploy_dialog(self):
         """Show the dialog for deploying a computer."""
         items = db.get_all_items()
+
+        ### Showing only items that are marked as deployable
+        items = [item for item in items if item['deployable']]
         dialog = DeployComputerDialog(self.root, items)
         self.root.wait_window(dialog.top)
         
@@ -681,8 +690,7 @@ class AddItemDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Add New Item")
-        self.top.geometry("400x270")
-        self.top.geometry("400x270")
+        self.top.geometry("500x370")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -723,6 +731,18 @@ class AddItemDialog:
         if self.locations:
             location_combo.current(0)
         location_combo.pack(fill=tk.X, pady=(5, 20))
+
+        ### Buttons for 'Deployable' checkbox and 'low_count' input
+        self.deployable_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame,
+            text = "Deployable",
+            variable = self.deployable_var
+        ).pack(anchor='w', pady = (0,10))
+
+        ttk.Label(frame, text="Low Count Threshold:").pack(anchor='w')
+        self.low_count_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=self.low_count_var, width = 40,).pack(fill=tk.X, pady=(5, 15))
         
         # Buttons
         btn_frame = ttk.Frame(frame)
@@ -757,7 +777,13 @@ class AddItemDialog:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
         
-        self.result = (name, count, location_id)
+        ### Functionality for initializing variables
+        deployable = self.deployable_var.get()
+
+        low_count_text = self.low_count_var.get().strip()
+        low_count = int(low_count_text) if low_count_text else None
+        
+        self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
 
 
@@ -790,7 +816,7 @@ class EditItemDialog:
 
         self.top = tk.Toplevel(parent)
         self.top.title("Edit Item")
-        self.top.geometry("400x270")
+        self.top.geometry("500x370")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -834,6 +860,20 @@ class EditItemDialog:
                 break
         location_combo.pack(fill=tk.X, pady=(5, 20))
 
+        ### Buttons for 'Deployable' checkbox and 'low_count' input
+        self.deployable_var = tk.BooleanVar(value=bool(self.item.get("deployable", 0)))
+        ttk.Checkbutton(
+            frame,
+            text="Deployable",
+            variable=self.deployable_var
+        ).pack(anchor='w', pady=(0, 10))
+
+        ttk.Label(frame, text="Low Count Threshold:").pack(anchor='w')
+        self.low_count_var = tk.StringVar(
+            value=str(self.item.get("low_count")) if self.item.get("low_count") is not None else ""
+        )
+        ttk.Entry(frame, textvariable=self.low_count_var, width=40).pack(fill=tk.X, pady=(5, 15))
+
         # Buttons
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X)
@@ -873,8 +913,14 @@ class EditItemDialog:
         if not location_id:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
+        
+        ### Functionality for initializing variables
+        deployable = self.deployable_var.get()
 
-        self.result = (name, count, location_id)
+        low_count_text = self.low_count_var.get().strip()
+        low_count = int(low_count_text) if low_count_text else None
+
+        self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
 
 
