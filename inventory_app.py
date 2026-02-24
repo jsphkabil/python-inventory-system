@@ -7,6 +7,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional
 import database as db
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 class InventoryApp:
@@ -83,23 +85,47 @@ class InventoryApp:
         
         # Summary section
         self.build_summary_section(main_frame)
-    
+
+    ### Build header including settings option
     def build_header(self, parent: ttk.Frame):
         """Build the header section."""
         header_frame = ttk.Frame(parent)
         header_frame.pack(fill=tk.X, pady=(0, 15))
-        
+
+        title_frame = ttk.Frame(header_frame)
+        title_frame.pack(fill=tk.X)
+
         ttk.Label(
-            header_frame,
+            title_frame,
             text="IT Help Room Inventory",
             style='Header.TLabel'
-        ).pack()
+        ).pack(side=tk.TOP)
         
+        ttk.Button(
+            title_frame,
+            text="⚙ Settings",
+            command=self.show_settings_dialog
+        ).pack(side=tk.RIGHT)
+
+        ### Button to refresh information being displayed
+        ttk.Button(
+            title_frame,
+            text="Refresh Info",
+            command=self.manual_refresh
+        ).pack(side=tk.RIGHT, padx=(0,10))
+        
+        ### Button to create report
+        ttk.Button(
+            title_frame,
+            text="Create Report",
+            command=self.create_report
+        ).pack(side=tk.LEFT)
+
         ttk.Label(
             header_frame,
             text="Track and manage IT equipment across all locations",
             style='Subheader.TLabel'
-        ).pack()
+        ).pack(side=tk.TOP)
     
     def build_search_section(self, parent: ttk.Frame):
         """Build the search and filter section."""
@@ -118,7 +144,7 @@ class InventoryApp:
         
         ttk.Label(search_col, text="Search Items", background='#ffffff').pack(anchor='w')
         self.search_var = tk.StringVar()
-        self.search_var.trace('w', lambda *args: self.refresh_items())
+        self.search_var.trace_add('write', lambda *args: self.refresh_items())
         search_entry = ttk.Entry(search_col, textvariable=self.search_var, width=40)
         search_entry.pack(fill=tk.X, pady=(5, 0))
         
@@ -128,16 +154,16 @@ class InventoryApp:
         
         ttk.Label(location_col, text="Filter by Location", background='#ffffff').pack(anchor='w')
         self.location_var = tk.StringVar(value='all')
-        location_combo = ttk.Combobox(
+        self.location_combo = ttk.Combobox(
             location_col,
             textvariable=self.location_var,
             state='readonly',
             width=30
         )
-        location_combo['values'] = ['All Locations'] + [loc['name'] for loc in self.locations]
-        location_combo.current(0)
-        location_combo.bind('<<ComboboxSelected>>', lambda e: self.refresh_items())
-        location_combo.pack(fill=tk.X, pady=(5, 0))
+        self.location_combo['values'] = ['All Locations'] + [loc['name'] for loc in self.locations]
+        self.location_combo.current(0)
+        self.location_combo.bind('<<ComboboxSelected>>', lambda e: self.refresh_items())
+        self.location_combo.pack(fill=tk.X, pady=(5, 0))
         
         # Action buttons row
         button_frame = ttk.Frame(search_frame)
@@ -174,6 +200,8 @@ class InventoryApp:
             show='headings',
             selectmode='browse'
         )
+        ### Added to allow alternate presentation of low stock items
+        self.items_tree.tag_configure('low_stock', foreground = 'red')
         
         self.items_tree.heading('name', text='Item Name')
         self.items_tree.heading('count', text='Count')
@@ -311,7 +339,7 @@ class InventoryApp:
         
         ttk.Label(
             summary_frame,
-            text="Inventory Summary",
+            text="Low Stock Summary",
             style='Section.TLabel'
         ).pack(anchor='w', pady=(0, 10))
         
@@ -324,7 +352,8 @@ class InventoryApp:
         for widget in self.summary_container.winfo_children():
             widget.destroy()
         
-        summary = db.get_location_summary()
+        ### Changed to low stock item summary
+        summary = db.get_low_item_location_summary()
         
         for i, loc in enumerate(summary):
             loc_frame = ttk.Frame(self.summary_container, padding=10)
@@ -332,8 +361,8 @@ class InventoryApp:
             
             ttk.Label(
                 loc_frame,
-                text=str(loc['total_count']),
-                font=('Segoe UI', 20, 'bold'),
+                text=f"Low Items: {loc['item_count']}",
+                font=('Segoe UI', 15, 'bold'),
                 background='#ffffff'
             ).pack()
             
@@ -342,14 +371,6 @@ class InventoryApp:
                 text=loc['name'],
                 background='#ffffff',
                 foreground='#666666'
-            ).pack()
-            
-            ttk.Label(
-                loc_frame,
-                text=f"{loc['item_count']} items",
-                background='#ffffff',
-                foreground='#999999',
-                font=('Segoe UI', 9)
             ).pack()
     
     def refresh_items(self):
@@ -374,12 +395,25 @@ class InventoryApp:
         items = db.get_all_items(location_id, search)
         
         for item in items:
+            ### Altered to mark item as low stock so that it can be presented differently
+            tags = ()
+            low = item["low_count"] if item["low_count"] is not None else 0
+            if item["count"] <= low:
+                tags = ('low_stock',)
+
             self.items_tree.insert(
                 '',
                 tk.END,
                 iid=str(item['id']),
-                values=(item['name'], item['count'], item['location_name'])
+                values=(item['name'], item['count'], item['location_name']),
+                tags=tags
             )
+
+    ### Function for 'Reset Info' button, refreshes information being displayed
+    def manual_refresh(self):
+        self.refresh_items()
+        self.refresh_summary()
+        self.root.update_idletasks()
     
     def on_item_select(self, event):
         """Handle item selection in the treeview."""
@@ -462,7 +496,25 @@ class InventoryApp:
         self.items_tree.selection_set(str(self.selected_item_id))
         
         messagebox.showinfo("Success", "Item count updated successfully!")
+
+    ### Function for updating location drop-down field
+    def update_location_filter(self):
+        values = ['All Locations'] + [loc['name'] for loc in self.locations]
+        self.location_combo['values'] = values
+        self.location_var.set('All Locations')
     
+    ### Function for 'Settings' button
+    def show_settings_dialog(self):
+        """Open the settings dialog."""
+        dialog = SettingsDialog(self.root, self.locations)
+        self.root.wait_window(dialog.top)
+
+        if dialog.updated:
+            self.locations = db.get_all_locations()
+            self.refresh_items()
+            self.refresh_summary()
+            self.update_location_filter()
+
     ### Function for 'Edit Item' button, 'delete_selected_item' function will be moved to 'EditItemDialog' class
     def show_edit_dialog(self):
         """Edit the currently selected item."""
@@ -487,15 +539,18 @@ class InventoryApp:
             self.refresh_summary()
             self.hide_editor()
             messagebox.showinfo("Success", "Item deleted successfully!")
-            
-        if dialog.result:
-            name, count, location_id = dialog.result
+        elif isinstance(dialog.result, tuple):
+            ### Initializing new variables 'deployable' and 'low_count'
+            name, count, location_id, deployable, low_count = dialog.result
 
             db.update_item(
                 item_id=self.selected_item_id,
                 name=name,
                 count=count,
-                location_id=location_id
+                location_id=location_id,
+                ### Passing new variables through
+                deployable=deployable,
+                low_count=low_count
             )
 
             self.refresh_items()
@@ -504,7 +559,7 @@ class InventoryApp:
             self.items_tree.selection_set(str(self.selected_item_id))
             self.show_editor(db.get_item_by_id(self.selected_item_id))
 
-            messagebox.showinfo("Success", "Item updated successfully!")
+            messagebox.showinfo("Success", "Item edited successfully!")
     
     def show_add_item_dialog(self):
         """Show the dialog for adding a new item."""
@@ -512,8 +567,10 @@ class InventoryApp:
         self.root.wait_window(dialog.top)
         
         if dialog.result:
-            name, count, location_id = dialog.result
-            db.add_item(name, count, location_id)
+            ### Initializing new variables 'deployable' and 'low_count'
+            name, count, location_id, deployable, low_count = dialog.result
+            db.add_item(name, count, location_id, deployable, low_count)
+
             self.refresh_items()
             self.refresh_summary()
             messagebox.showinfo("Success", f'Added "{name}" to inventory. Yay I made a change!!')
@@ -521,6 +578,9 @@ class InventoryApp:
     def show_deploy_dialog(self):
         """Show the dialog for deploying a computer."""
         items = db.get_all_items()
+
+        ### Showing only items that are marked as deployable
+        items = [item for item in items if item['deployable']]
         dialog = DeployComputerDialog(self.root, items)
         self.root.wait_window(dialog.top)
         
@@ -532,6 +592,191 @@ class InventoryApp:
             total_qty = sum(qty for _, qty in dialog.result)
             messagebox.showinfo("Success", f"Computer deployed with {total_qty} items!")
 
+    ### Function to create excel report
+    def create_report(self):
+        items = db.get_all_items()  # get all items
+
+        if not items:
+            messagebox.showinfo("No Items", "There are no items to report.")
+            return
+
+        # --- Sort items by location first, then by name ---
+        items = sorted(items, key=lambda x: (x['location_name'], x['name']))
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inventory Report"
+
+        # --- Styles ---
+        title_font = Font(size=14, bold=True)
+        header_font = Font(bold=True)
+        bold_font = Font(bold=True)
+        header_fill = PatternFill("solid", fgColor="D9D9D9")  # light gray
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        center_align = Alignment(horizontal="center", vertical="center")
+        left_align = Alignment(horizontal="left", vertical="center")
+
+        # --- Title row ---
+        ws.merge_cells("A1:C1")
+        ws["A1"] = "General Inventory"
+        ws["A1"].font = title_font
+        ws["A1"].alignment = center_align
+
+        # --- Column headers ---
+        ws.append(["Location", "Item Description", "# in Inventory"])
+        for cell in ws[2]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        # --- Add items with location groups in the first column ---
+        current_row = 3
+        last_cabinet = None
+
+        for item in items:
+            cabinet = item['location_name']
+
+            # Insert item row
+            ws.append([
+                cabinet if cabinet != last_cabinet else "",  # only show location once
+                item['name'],
+                item['count']
+            ])
+
+            # Formatting
+            if cabinet != last_cabinet:
+                # Bold the location cell
+                ws[f"A{current_row}"].font = bold_font
+                ws[f"A{current_row}"].alignment = left_align
+
+            ws[f"B{current_row}"].alignment = left_align
+            ws[f"C{current_row}"].alignment = center_align
+
+            # Borders
+            for col in ["A", "B", "C"]:
+                ws[f"{col}{current_row}"].border = thin_border
+
+            last_cabinet = cabinet
+            current_row += 1
+
+        # --- Adjust column widths ---
+        ws.column_dimensions['A'].width = 20  # Location
+        ws.column_dimensions['B'].width = 40  # Item
+        ws.column_dimensions['C'].width = 20  # Count
+
+        # --- Save file ---
+        from tkinter import filedialog, messagebox
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            title="Save Inventory Report As"
+        )
+        
+        if file_path:
+            wb.save(file_path)
+            messagebox.showinfo("Report Created", f"Inventory report saved as:\n{file_path}")
+
+### Dialog box for settings window
+class SettingsDialog:
+    def __init__(self, parent: tk.Tk, locations: list[dict]):
+        self.updated = False
+        self.locations = locations
+
+        self.top = tk.Toplevel(parent)
+        self.top.title("Settings - Manage Locations")
+        self.top.geometry("500x400")
+        self.top.resizable(False, False)
+        self.top.transient(parent)
+        self.top.grab_set()
+
+        self.build_ui()
+        self.refresh_locations()
+
+    def build_ui(self):
+        frame = ttk.Frame(self.top, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="Manage Locations",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(anchor='w', pady=(0, 10))
+
+        self.location_listbox = tk.Listbox(frame, height=10)
+        self.location_listbox.pack(fill=tk.BOTH, expand=True)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X, pady=(15, 0))
+
+        ttk.Button(btn_frame, text="Add", command = self.add_location).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Edit", command=self.edit_location).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete", command=self.delete_location).pack(side=tk.LEFT)
+
+        ttk.Button(btn_frame, text="Close", command=self.top.destroy).pack(side=tk.RIGHT)
+
+    def refresh_locations(self):
+        self.location_listbox.delete(0, tk.END)
+        self.locations = db.get_all_locations()
+        for loc in self.locations:
+            self.location_listbox.insert(tk.END, loc['name'])
+
+    def add_location(self):
+        name = simple_input_dialog(self.top, "Add Location", "Enter location name:")
+        if not name:
+            return
+
+        db.add_location(name)
+        self.updated = True
+        self.refresh_locations()
+
+    def edit_location(self):
+        selection = self.location_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        location = self.locations[index]
+
+        new_name = simple_input_dialog(
+            self.top,
+            "Edit Location",
+            "Edit location name:",
+            initial=location['name']
+        )
+
+        if not new_name:
+            return
+
+        db.update_location(location['id'], new_name)
+        self.updated = True
+        self.refresh_locations()
+
+    def delete_location(self):
+        selection = self.location_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        location = self.locations[index]
+
+        confirm = messagebox.askyesno(
+            "Delete Location?",
+            f'Are you sure you want to delete "{location["name"]}"?\n\n'
+            "Items in this location must be reassigned first.",
+            parent=self.top
+        )
+
+        if confirm:
+            db.delete_location(location['id'])
+            self.updated = True
+            self.refresh_locations()
+
 
 class AddItemDialog:
     """Dialog for adding a new inventory item."""
@@ -542,8 +787,7 @@ class AddItemDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Add New Item")
-        self.top.geometry("400x270")
-        self.top.geometry("400x270")
+        self.top.geometry("500x370")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -584,6 +828,18 @@ class AddItemDialog:
         if self.locations:
             location_combo.current(0)
         location_combo.pack(fill=tk.X, pady=(5, 20))
+
+        ### Buttons for 'Deployable' checkbox and 'low_count' input
+        self.deployable_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame,
+            text = "Deployable",
+            variable = self.deployable_var
+        ).pack(anchor='w', pady = (0,10))
+
+        ttk.Label(frame, text="Low Count Threshold:").pack(anchor='w')
+        self.low_count_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=self.low_count_var, width = 40,).pack(fill=tk.X, pady=(5, 15))
         
         # Buttons
         btn_frame = ttk.Frame(frame)
@@ -614,11 +870,30 @@ class AddItemDialog:
                 location_id = loc['id']
                 break
         
-        if not location_id:
+        if location_id is None:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
         
-        self.result = (name, count, location_id)
+        ### Functionality for initializing variables
+        deployable = self.deployable_var.get()
+
+        low_count_text = self.low_count_var.get().strip()
+        if low_count_text:
+            try:
+                low_count = int(low_count_text)
+                if low_count < 0:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror(
+                    "Error",
+                    "Low Count Threshold must be a valid number (0 or greater)",
+                    parent=self.top
+                )
+                return
+        else:
+            low_count = None
+        
+        self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
 
 
@@ -651,7 +926,7 @@ class EditItemDialog:
 
         self.top = tk.Toplevel(parent)
         self.top.title("Edit Item")
-        self.top.geometry("400x270")
+        self.top.geometry("500x370")
         self.top.resizable(False, False)
         self.top.transient(parent)
         self.top.grab_set()
@@ -695,6 +970,20 @@ class EditItemDialog:
                 break
         location_combo.pack(fill=tk.X, pady=(5, 20))
 
+        ### Buttons for 'Deployable' checkbox and 'low_count' input
+        self.deployable_var = tk.BooleanVar(value=bool(self.item.get("deployable", 0)))
+        ttk.Checkbutton(
+            frame,
+            text="Deployable",
+            variable=self.deployable_var
+        ).pack(anchor='w', pady=(0, 10))
+
+        ttk.Label(frame, text="Low Count Threshold:").pack(anchor='w')
+        self.low_count_var = tk.StringVar(
+            value=str(self.item.get("low_count")) if self.item.get("low_count") is not None else ""
+        )
+        ttk.Entry(frame, textvariable=self.low_count_var, width=40).pack(fill=tk.X, pady=(5, 15))
+
         # Buttons
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X)
@@ -731,11 +1020,30 @@ class EditItemDialog:
                 location_id = loc['id']
                 break
 
-        if not location_id:
+        if location_id is None:
             messagebox.showerror("Error", "Please select a location", parent=self.top)
             return
+        
+        ### Functionality for initializing variables
+        deployable = self.deployable_var.get()
 
-        self.result = (name, count, location_id)
+        low_count_text = self.low_count_var.get().strip()
+        if low_count_text:
+            try:
+                low_count = int(low_count_text)
+                if low_count < 0:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror(
+                    "Error",
+                    "Low Count Threshold must be a valid number (0 or greater)",
+                    parent=self.top
+                )
+                return
+        else:
+            low_count = None
+
+        self.result = (name, count, location_id, deployable, low_count)
         self.top.destroy()
 
 
@@ -749,7 +1057,6 @@ class DeployComputerDialog:
         
         self.top = tk.Toplevel(parent)
         self.top.title("Deploy Computer")
-        self.top.geometry("700x500")
         self.top.geometry("700x500")
         self.top.resizable(False, False)
         self.top.transient(parent)
@@ -803,6 +1110,17 @@ class DeployComputerDialog:
         
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+
+        ### 'Deploy Computer' window to scrollable window
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        # Windows
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+
+        # Linux
+        canvas.bind("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
         
         # Add items with quantity inputs
         for item in self.items:
@@ -879,6 +1197,33 @@ class DeployComputerDialog:
         
         self.result = deployments
         self.top.destroy()
+
+
+### Input Dialog Helper
+def simple_input_dialog(parent, title, prompt, initial=""):
+    dialog = tk.Toplevel(parent)
+    dialog.title(title)
+    dialog.geometry("300x150")
+    dialog.transient(parent)
+    dialog.grab_set()
+
+    ttk.Label(dialog, text=prompt).pack(pady=10)
+
+    value_var = tk.StringVar(value=initial)
+    entry = ttk.Entry(dialog, textvariable=value_var)
+    entry.pack(pady=5)
+    entry.focus()
+
+    result = {"value": None}
+
+    def submit():
+        result["value"] = value_var.get().strip()
+        dialog.destroy()
+
+    ttk.Button(dialog, text="OK", command=submit).pack(pady=10)
+
+    parent.wait_window(dialog)
+    return result["value"]
 
 
 def main():
