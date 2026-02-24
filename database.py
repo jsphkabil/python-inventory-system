@@ -134,7 +134,7 @@ def seed_inventory(cursor: sqlite3.Cursor):
         INSERT INTO inventory (name, count, deployable, low_count, location_id)
         VALUES (?, ?, ?, ?, ?)
         """,
-        [(name, count, 1, None, location) for (name, count, location) in items]
+        [(name, count, 1, 0, location) for (name, count, location) in items]
     )
 
 
