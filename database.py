@@ -12,7 +12,17 @@ from typing import Optional
 from collections import defaultdict
 
 # Database file path
-DB_PATH = Path(__file__).parent / "inventory.db"
+### DB_PATH = Path(__file__).parent / "inventory.db"
+### Pre-packaging fix
+import sys
+
+if getattr(sys, 'frozen', False):
+    # Running as EXE
+    BASE_DIR = Path(sys.executable).parent
+else:
+    BASE_DIR = Path(__file__).parent
+
+DB_PATH = BASE_DIR / "inventory.db"
 
 
 def get_connection() -> sqlite3.Connection:
